@@ -1,3 +1,4 @@
+import BookingForm from "./components/BookingForm";
 const features = [
   {
     title: "AI Reply Generator",
@@ -199,6 +200,10 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-7xl px-6 py-20">
+        <BookingForm />
+      </section>
+      
       <section
         id="workflow"
         className="mx-auto max-w-7xl px-6 py-20"
