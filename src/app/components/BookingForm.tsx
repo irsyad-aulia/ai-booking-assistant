@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 type BookingFormData = {
   name: string;
@@ -25,6 +26,9 @@ export default function BookingForm() {
   const [submittedData, setSubmittedData] = useState<BookingFormData | null>(
     null
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   function updateField(field: keyof BookingFormData, value: string) {
     setFormData((currentData) => ({
@@ -33,9 +37,40 @@ export default function BookingForm() {
     }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function generateAiReply(data: BookingFormData) {
+    return `Hi ${data.name}, thanks for your booking request for ${data.service}. We received your preferred schedule and will confirm availability shortly.`;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    setIsSubmitting(true);
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    const aiReply = generateAiReply(formData);
+
+    const { error } = await supabase.from("booking_requests").insert({
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      service: formData.service,
+      preferred_date: formData.preferredDate,
+      message: formData.message,
+      status: "New Request",
+      ai_reply: aiReply,
+    });
+
+    setIsSubmitting(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
     setSubmittedData(formData);
+    setSuccessMessage("Booking request submitted successfully.");
+    setFormData(initialFormData);
   }
 
   return (
@@ -52,8 +87,7 @@ export default function BookingForm() {
             Submit a new booking request.
           </h2>
           <p className="mt-3 leading-7 text-slate-400">
-            This form will later connect to Supabase, the admin dashboard, and
-            the AI reply generator.
+            This form now saves customer booking requests into Supabase.
           </p>
         </div>
 
@@ -151,11 +185,24 @@ export default function BookingForm() {
             />
           </div>
 
+          {successMessage && (
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-300">
+              {successMessage}
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-300">
+              {errorMessage}
+            </div>
+          )}
+
           <button
             type="submit"
-            className="rounded-full bg-cyan-300 px-7 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-200"
+            disabled={isSubmitting}
+            className="rounded-full bg-cyan-300 px-7 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Submit Booking Request
+            {isSubmitting ? "Submitting..." : "Submit Booking Request"}
           </button>
         </div>
       </form>
@@ -196,9 +243,7 @@ export default function BookingForm() {
                 AI Reply Draft
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                Hi {submittedData.name}, thanks for your booking request for{" "}
-                {submittedData.service}. We received your preferred schedule and
-                will confirm availability shortly.
+                {generateAiReply(submittedData)}
               </p>
             </div>
           </div>
