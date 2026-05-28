@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 type BookingFormData = {
   name: string;
@@ -10,6 +9,10 @@ type BookingFormData = {
   service: string;
   preferredDate: string;
   message: string;
+};
+
+type SubmittedBookingData = BookingFormData & {
+  aiReply: string;
 };
 
 const initialFormData: BookingFormData = {
@@ -23,9 +26,8 @@ const initialFormData: BookingFormData = {
 
 export default function BookingForm() {
   const [formData, setFormData] = useState<BookingFormData>(initialFormData);
-  const [submittedData, setSubmittedData] = useState<BookingFormData | null>(
-    null
-  );
+  const [submittedData, setSubmittedData] =
+    useState<SubmittedBookingData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -37,10 +39,6 @@ export default function BookingForm() {
     }));
   }
 
-  function generateAiReply(data: BookingFormData) {
-    return `Hi ${data.name}, thanks for your booking request for ${data.service}. We received your preferred schedule and will confirm availability shortly.`;
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -48,29 +46,37 @@ export default function BookingForm() {
     setSuccessMessage("");
     setErrorMessage("");
 
-    const aiReply = generateAiReply(formData);
+    try {
+      const response = await fetch("/api/booking-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
-    const { error } = await supabase.from("booking_requests").insert({
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      service: formData.service,
-      preferred_date: formData.preferredDate,
-      message: formData.message,
-      status: "New Request",
-      ai_reply: aiReply,
-    });
+      const result = await response.json();
 
-    setIsSubmitting(false);
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to submit booking request.");
+      }
 
-    if (error) {
-      setErrorMessage(error.message);
-      return;
+      setSubmittedData({
+        ...formData,
+        aiReply: result.bookingRequest.ai_reply,
+      });
+
+      setSuccessMessage("Booking request submitted successfully.");
+      setFormData(initialFormData);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while submitting the booking request."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setSubmittedData(formData);
-    setSuccessMessage("Booking request submitted successfully.");
-    setFormData(initialFormData);
   }
 
   return (
@@ -87,7 +93,8 @@ export default function BookingForm() {
             Submit a new booking request.
           </h2>
           <p className="mt-3 leading-7 text-slate-400">
-            This form now saves customer booking requests into Supabase.
+            This form now sends booking details to Gemini, generates a
+            professional reply, and saves the result into Supabase.
           </p>
         </div>
 
@@ -202,7 +209,7 @@ export default function BookingForm() {
             disabled={isSubmitting}
             className="rounded-full bg-cyan-300 px-7 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "Submitting..." : "Submit Booking Request"}
+            {isSubmitting ? "Generating AI Reply..." : "Submit Booking Request"}
           </button>
         </div>
       </form>
@@ -243,14 +250,14 @@ export default function BookingForm() {
                 AI Reply Draft
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                {generateAiReply(submittedData)}
+                {submittedData.aiReply}
               </p>
             </div>
           </div>
         ) : (
           <p className="mt-8 leading-7 text-slate-400">
-            Submit the form to preview how a booking request will appear inside
-            the system.
+            Submit the form to preview the AI-generated reply and save the
+            booking request into Supabase.
           </p>
         )}
       </div>
