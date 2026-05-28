@@ -13,6 +13,19 @@ type CreateBookingRequestBody = {
   message?: string;
 };
 
+type SavedBookingRequest = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  service: string;
+  preferred_date: string;
+  message: string | null;
+  status: string;
+  ai_reply: string | null;
+  created_at: string;
+};
+
 function createFallbackReply(data: CreateBookingRequestBody) {
   return `Hi ${data.name}, thanks for your booking request for ${data.service}. We received your preferred schedule and will confirm availability shortly.`;
 }
@@ -59,6 +72,42 @@ Rules:
   } catch (error) {
     console.error("Gemini API error:", error);
     return createFallbackReply(data);
+  }
+}
+
+async function sendBookingToN8n(bookingRequest: SavedBookingRequest) {
+  const webhookUrl = process.env.N8N_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    console.warn("Missing N8N_WEBHOOK_URL. Skipping n8n notification.");
+    return;
+  }
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event: "booking_request_created",
+        source: "ai-booking-assistant",
+        bookingRequest: {
+          id: bookingRequest.id,
+          name: bookingRequest.name,
+          email: bookingRequest.email,
+          phone: bookingRequest.phone,
+          service: bookingRequest.service,
+          preferredDate: bookingRequest.preferred_date,
+          message: bookingRequest.message,
+          status: bookingRequest.status,
+          aiReply: bookingRequest.ai_reply,
+          createdAt: bookingRequest.created_at,
+        },
+      }),
+    });
+  } catch (error) {
+    console.error("n8n webhook error:", error);
   }
 }
 
@@ -129,6 +178,8 @@ export async function POST(request: NextRequest) {
       }
     );
   }
+
+  await sendBookingToN8n(data);
 
   return NextResponse.json({
     bookingRequest: data,
